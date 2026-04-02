@@ -49,6 +49,18 @@
             margin-top: 6px;
         }
 
+        .connection-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        .connection-status.connected { background: rgba(16,185,129,0.3); color: #d1fae5; }
+        .connection-status.disconnected { background: rgba(239,68,68,0.3); color: #fecaca; }
+        .connection-status.local { background: rgba(251,191,36,0.3); color: #fef3c7; }
+
         .tabs {
             display: flex;
             justify-content: center;
@@ -209,7 +221,6 @@
 
         .cell:hover {
             background: rgba(0,122,110,0.06);
-            transform: scale(1.01);
         }
 
         .cell.selected-by-me {
@@ -256,11 +267,11 @@
 
         /* Color coding by congestion */
         .cell.heat-0 { background: #ffffff; }
-        .cell.heat-1 { background: #d1fae5; }  /* 1 group = green, 10pts each */
-        .cell.heat-2 { background: #a7f3d0; }  /* 2 groups = still good, 5pts */
-        .cell.heat-3 { background: #fef9c3; }  /* 3 groups = yellow, 3.33pts */
-        .cell.heat-4 { background: #fed7aa; }  /* 4+ = orange, getting crowded */
-        .cell.heat-5 { background: #fecaca; }  /* 5+ = red, very crowded */
+        .cell.heat-1 { background: #d1fae5; }
+        .cell.heat-2 { background: #a7f3d0; }
+        .cell.heat-3 { background: #fef9c3; }
+        .cell.heat-4 { background: #fed7aa; }
+        .cell.heat-5 { background: #fecaca; }
 
         .summary {
             margin-top: 24px;
@@ -362,6 +373,7 @@
     <div class="header">
         <h1>Emerging Technology & Operations Challenge</h1>
         <p>POM Group Project - Cell Selection Matrix</p>
+        <div class="connection-status" id="conn-status">Connecting...</div>
     </div>
 
     <div class="tabs">
@@ -424,29 +436,15 @@
         </div>
     </div>
 
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
     <script>
-        // Firebase config - using a public realtime database
-        const firebaseConfig = {
-            apiKey: "AIzaSyDummyKeyForPublicUse",
-            databaseURL: "https://pom-matrix-default-rtdb.firebaseio.com",
-            projectId: "pom-matrix",
-        };
-
-        // Initialize Firebase
-        let db;
-        let useLocalStorage = false;
-
-        try {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-        } catch (e) {
-            console.warn("Firebase not available, falling back to localStorage", e);
-            useLocalStorage = true;
-        }
+        // ============================================================
+        // SUPABASE CONFIG - Update these with your project credentials
+        // ============================================================
+        const SUPABASE_URL = "https://hwxfrfehgtcggueugakd.supabase.co";
+        const SUPABASE_ANON_KEY = "YOUR_ANON_KEY_HERE"; // Replace with your anon key from Supabase dashboard > Settings > API
 
         // Matrix data
         const technologies = [
@@ -465,15 +463,42 @@
             "Pricing & Revenue Management"
         ];
 
-        const sections = {
-            E9: { groups: 12 },
-            E8: { groups: 12 }
-        };
+        const sections = { E9: { groups: 12 }, E8: { groups: 12 } };
 
         let activeSection = "E9";
-        let selections = { E9: {}, E8: {} }; // { groupId: "row-col" }
+        let selections = { E9: {}, E8: {} };
+        let supabase = null;
+        let useLocalStorage = false;
 
-        // LocalStorage fallback helpers
+        // ============================================================
+        // SUPABASE INITIALIZATION
+        // ============================================================
+        function initSupabase() {
+            const statusEl = document.getElementById("conn-status");
+
+            if (SUPABASE_ANON_KEY === "YOUR_ANON_KEY_HERE" || !window.supabase) {
+                console.warn("Supabase not configured, using localStorage fallback");
+                useLocalStorage = true;
+                statusEl.textContent = "Local mode (no sync)";
+                statusEl.className = "connection-status local";
+                return;
+            }
+
+            try {
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                statusEl.textContent = "Connected (live sync)";
+                statusEl.className = "connection-status connected";
+            } catch (e) {
+                console.warn("Supabase init failed, using localStorage", e);
+                useLocalStorage = true;
+                statusEl.textContent = "Local mode (no sync)";
+                statusEl.className = "connection-status local";
+            }
+        }
+
+        // ============================================================
+        // DATA OPERATIONS
+        // ============================================================
         function getLocalSelections(section) {
             try {
                 const data = localStorage.getItem(`pom-selections-${section}`);
@@ -485,74 +510,127 @@
             localStorage.setItem(`pom-selections-${section}`, JSON.stringify(data));
         }
 
-        // Initialize
-        function init() {
-            // Populate group selects
-            ["E9", "E8"].forEach(section => {
-                const select = document.getElementById(`group-select-${section}`);
-                for (let i = 1; i <= sections[section].groups; i++) {
-                    const opt = document.createElement("option");
-                    const num = String(i).padStart(2, "0");
-                    opt.value = `Group ${num}`;
-                    opt.textContent = `Group ${num}`;
-                    select.appendChild(opt);
-                }
+        async function loadSelections(section) {
+            if (useLocalStorage) {
+                selections[section] = getLocalSelections(section);
+                renderMatrix(section);
+                return;
+            }
 
-                // Restore saved group from localStorage
-                const savedGroup = localStorage.getItem(`pom-mygroup-${section}`);
-                if (savedGroup) select.value = savedGroup;
+            try {
+                const { data, error } = await supabase
+                    .from("pom_selections")
+                    .select("group_name, cell_id")
+                    .eq("section", section);
 
-                select.addEventListener("change", () => {
-                    localStorage.setItem(`pom-mygroup-${section}`, select.value);
-                    renderMatrix(section);
-                });
+                if (error) throw error;
 
-                // Clear button
-                document.getElementById(`clear-btn-${section}`).addEventListener("click", () => {
-                    const group = select.value;
-                    if (!group) return;
-                    clearSelection(section, group);
-                });
-            });
+                const sels = {};
+                (data || []).forEach(row => { sels[row.group_name] = row.cell_id; });
+                selections[section] = sels;
+                renderMatrix(section);
+            } catch (e) {
+                console.error("Failed to load selections, falling back to localStorage", e);
+                selections[section] = getLocalSelections(section);
+                renderMatrix(section);
+            }
+        }
 
-            // Tab switching
-            document.querySelectorAll(".tab").forEach(tab => {
-                tab.addEventListener("click", () => {
-                    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-                    tab.classList.add("active");
-                    activeSection = tab.dataset.section;
-                    document.querySelectorAll(".section-content").forEach(s => s.classList.remove("active"));
-                    document.getElementById(`section-${activeSection}`).classList.add("active");
-                });
-            });
+        async function selectCell(section, group, cellId) {
+            // Optimistic update
+            selections[section][group] = cellId;
+            renderMatrix(section);
 
-            // Build matrices
-            buildMatrix("E9");
-            buildMatrix("E8");
+            if (useLocalStorage) {
+                const data = getLocalSelections(section);
+                data[group] = cellId;
+                setLocalSelections(section, data);
+                return;
+            }
 
-            // Listen for changes
-            if (!useLocalStorage) {
-                ["E9", "E8"].forEach(section => {
-                    db.ref(`selections/${section}`).on("value", snapshot => {
-                        selections[section] = snapshot.val() || {};
-                        renderMatrix(section);
-                    });
-                });
-            } else {
-                ["E9", "E8"].forEach(section => {
-                    selections[section] = getLocalSelections(section);
-                    renderMatrix(section);
-                });
-                // Poll localStorage for changes every 2 seconds
+            try {
+                const { error } = await supabase
+                    .from("pom_selections")
+                    .upsert(
+                        { section, group_name: group, cell_id: cellId, updated_at: new Date().toISOString() },
+                        { onConflict: "section,group_name" }
+                    );
+                if (error) throw error;
+            } catch (e) {
+                console.error("Failed to save selection", e);
+                // Keep optimistic update, save locally as backup
+                const data = getLocalSelections(section);
+                data[group] = cellId;
+                setLocalSelections(section, data);
+            }
+        }
+
+        async function clearSelection(section, group) {
+            // Optimistic update
+            delete selections[section][group];
+            renderMatrix(section);
+
+            if (useLocalStorage) {
+                const data = getLocalSelections(section);
+                delete data[group];
+                setLocalSelections(section, data);
+                return;
+            }
+
+            try {
+                const { error } = await supabase
+                    .from("pom_selections")
+                    .delete()
+                    .eq("section", section)
+                    .eq("group_name", group);
+                if (error) throw error;
+            } catch (e) {
+                console.error("Failed to clear selection", e);
+                const data = getLocalSelections(section);
+                delete data[group];
+                setLocalSelections(section, data);
+            }
+        }
+
+        // ============================================================
+        // REALTIME SUBSCRIPTION
+        // ============================================================
+        function subscribeToChanges() {
+            if (useLocalStorage) {
+                // Poll localStorage every 2 seconds for cross-tab sync
                 setInterval(() => {
                     ["E9", "E8"].forEach(section => {
                         selections[section] = getLocalSelections(section);
                         renderMatrix(section);
                     });
                 }, 2000);
+                return;
             }
+
+            supabase
+                .channel("pom-realtime")
+                .on("postgres_changes",
+                    { event: "*", schema: "public", table: "pom_selections" },
+                    (payload) => {
+                        const section = payload.new?.section || payload.old?.section;
+                        if (section) loadSelections(section);
+                    }
+                )
+                .subscribe((status) => {
+                    const statusEl = document.getElementById("conn-status");
+                    if (status === "SUBSCRIBED") {
+                        statusEl.textContent = "Live sync active";
+                        statusEl.className = "connection-status connected";
+                    } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+                        statusEl.textContent = "Disconnected";
+                        statusEl.className = "connection-status disconnected";
+                    }
+                });
         }
 
+        // ============================================================
+        // UI RENDERING
+        // ============================================================
         function buildMatrix(section) {
             const wrapper = document.getElementById(`matrix-${section}`);
             let html = "<table><thead><tr>";
@@ -589,30 +667,6 @@
             });
         }
 
-        function selectCell(section, group, cellId) {
-            if (useLocalStorage) {
-                const data = getLocalSelections(section);
-                data[group] = cellId;
-                setLocalSelections(section, data);
-                selections[section] = data;
-                renderMatrix(section);
-            } else {
-                db.ref(`selections/${section}/${group}`).set(cellId);
-            }
-        }
-
-        function clearSelection(section, group) {
-            if (useLocalStorage) {
-                const data = getLocalSelections(section);
-                delete data[group];
-                setLocalSelections(section, data);
-                selections[section] = data;
-                renderMatrix(section);
-            } else {
-                db.ref(`selections/${section}/${group}`).remove();
-            }
-        }
-
         function renderMatrix(section) {
             const myGroup = document.getElementById(`group-select-${section}`).value;
             const sels = selections[section] || {};
@@ -638,7 +692,7 @@
                     const points = count > 0 ? (10 / count) : 10;
                     const isMyCell = sels[myGroup] === cellId;
 
-                    // Remove old classes
+                    // Reset classes
                     el.className = "cell";
 
                     // Heat class
@@ -692,7 +746,7 @@
                 let pointsClass = "";
                 if (cellId) {
                     const [ri, ci] = cellId.split("-").map(Number);
-                    selText = `${technologies[ri].split("(")[0].trim()} × ${problems[ci].split("(")[0].trim()}`;
+                    selText = `${technologies[ri].split("(")[0].trim()} &times; ${problems[ci].split("(")[0].trim()}`;
                     pointsClass = points >= 5 ? "points-high" : points >= 3 ? "points-mid" : "points-low";
                 }
 
@@ -700,7 +754,7 @@
                     <div class="group-row" style="${isMe ? 'background:#f0fdf4;border-radius:6px;padding:8px;' : ''}">
                         <span class="group-name">${gName} ${isMe ? '(You)' : ''}</span>
                         <span class="group-selection">${cellId ? selText : '<span class="no-selection">Not yet selected</span>'}</span>
-                        <span class="group-points ${pointsClass}">${cellId ? points.toFixed(2) + ' pts' : '—'}</span>
+                        <span class="group-points ${pointsClass}">${cellId ? points.toFixed(2) + ' pts' : '&mdash;'}</span>
                     </div>
                 `;
             }
@@ -719,8 +773,8 @@
                         cellDistRows += `
                             <div class="group-row">
                                 <span class="group-name" style="font-size:0.8rem">${tech.split("(")[0].trim()}</span>
-                                <span class="group-selection" style="font-size:0.75rem">× ${prob.split("(")[0].trim()}</span>
-                                <span class="group-points ${pointsClass}">${count} team${count>1?'s':''} → ${points} pts</span>
+                                <span class="group-selection" style="font-size:0.75rem">&times; ${prob.split("(")[0].trim()}</span>
+                                <span class="group-points ${pointsClass}">${count} team${count>1?'s':''} &rarr; ${points} pts</span>
                             </div>
                         `;
                     }
@@ -729,7 +783,6 @@
 
             const totalGroups = Object.keys(sels).length;
             const totalCells = technologies.length * problems.length;
-            const idealSpread = totalGroups > 0 ? Math.min(totalGroups, totalCells) : 0;
 
             summaryEl.innerHTML = `
                 <div class="summary-card">
@@ -750,7 +803,63 @@
             `;
         }
 
-        // Start
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+        function init() {
+            initSupabase();
+
+            // Populate group selects
+            ["E9", "E8"].forEach(section => {
+                const select = document.getElementById(`group-select-${section}`);
+                for (let i = 1; i <= sections[section].groups; i++) {
+                    const opt = document.createElement("option");
+                    const num = String(i).padStart(2, "0");
+                    opt.value = `Group ${num}`;
+                    opt.textContent = `Group ${num}`;
+                    select.appendChild(opt);
+                }
+
+                // Restore saved group
+                const savedGroup = localStorage.getItem(`pom-mygroup-${section}`);
+                if (savedGroup) select.value = savedGroup;
+
+                select.addEventListener("change", () => {
+                    localStorage.setItem(`pom-mygroup-${section}`, select.value);
+                    renderMatrix(section);
+                });
+
+                // Clear button
+                document.getElementById(`clear-btn-${section}`).addEventListener("click", () => {
+                    const group = select.value;
+                    if (!group) return;
+                    clearSelection(section, group);
+                });
+            });
+
+            // Tab switching
+            document.querySelectorAll(".tab").forEach(tab => {
+                tab.addEventListener("click", () => {
+                    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+                    tab.classList.add("active");
+                    activeSection = tab.dataset.section;
+                    document.querySelectorAll(".section-content").forEach(s => s.classList.remove("active"));
+                    document.getElementById(`section-${activeSection}`).classList.add("active");
+                });
+            });
+
+            // Build matrices
+            buildMatrix("E9");
+            buildMatrix("E8");
+
+            // Load initial data
+            loadSelections("E9");
+            loadSelections("E8");
+
+            // Subscribe to realtime changes
+            subscribeToChanges();
+        }
+
         init();
     </script>
 </body>
