@@ -444,7 +444,7 @@
         // SUPABASE CONFIG - Update these with your project credentials
         // ============================================================
         const SUPABASE_URL = "https://hwxfrfehgtcggueugakd.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_DU_IpIoqbZNRQNguv4Fq2A_czytXn3R";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eGZyZmVoZ3RjZ2d1ZXVnYWtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4Mzk1ODEsImV4cCI6MjA4MjQxNTU4MX0.uq-UhfVUZ0fetdS59CIayk9jwYNOFcNLiTEgapjHVys";
 
         // Matrix data
         const technologies = [
@@ -476,7 +476,7 @@
         function initSupabase() {
             const statusEl = document.getElementById("conn-status");
 
-            if (SUPABASE_ANON_KEY === "YOUR_ANON_KEY_HERE" || !window.supabase) {
+            if (!SUPABASE_ANON_KEY || !window.supabase) {
                 console.warn("Supabase not configured, using localStorage fallback");
                 useLocalStorage = true;
                 statusEl.textContent = "Local mode (no sync)";
