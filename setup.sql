@@ -14,21 +14,27 @@ CREATE TABLE IF NOT EXISTS pom_selections (
 -- Enable Row Level Security but allow all operations (public site)
 ALTER TABLE pom_selections ENABLE ROW LEVEL SECURITY;
 
--- Allow anyone to read
+-- Drop existing policies if they exist, then recreate
+DROP POLICY IF EXISTS "Allow public read" ON pom_selections;
 CREATE POLICY "Allow public read" ON pom_selections
     FOR SELECT USING (true);
 
--- Allow anyone to insert
+DROP POLICY IF EXISTS "Allow public insert" ON pom_selections;
 CREATE POLICY "Allow public insert" ON pom_selections
     FOR INSERT WITH CHECK (true);
 
--- Allow anyone to update
+DROP POLICY IF EXISTS "Allow public update" ON pom_selections;
 CREATE POLICY "Allow public update" ON pom_selections
     FOR UPDATE USING (true);
 
--- Allow anyone to delete
+DROP POLICY IF EXISTS "Allow public delete" ON pom_selections;
 CREATE POLICY "Allow public delete" ON pom_selections
     FOR DELETE USING (true);
 
--- Enable realtime for this table
-ALTER PUBLICATION supabase_realtime ADD TABLE pom_selections;
+-- Enable realtime for this table (ignore error if already added)
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pom_selections;
+EXCEPTION WHEN duplicate_object THEN
+    NULL;
+END $$;
