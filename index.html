@@ -190,7 +190,7 @@
         }
 
         .row-header {
-            background: var(--yellow) !important;
+            background: #ffffff !important;
             font-weight: 600;
             font-size: 0.9rem;
             text-align: left;
@@ -198,7 +198,7 @@
         }
 
         .side-header {
-            background: var(--yellow) !important;
+            background: #ffffff !important;
             font-weight: 800;
             font-size: 0.8rem;
             text-transform: uppercase;
@@ -208,6 +208,22 @@
             transform: rotate(180deg);
             color: var(--teal);
             min-width: 50px;
+        }
+
+        .super-header {
+            background: #ffffff !important;
+            color: var(--teal);
+            font-size: 1.1rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: none !important;
+            padding-bottom: 4px;
+        }
+
+        th.no-bg {
+            background: #ffffff !important;
+            border: none !important;
         }
 
         .cell {
@@ -646,8 +662,11 @@
         // ============================================================
         function buildMatrix(section) {
             const wrapper = document.getElementById(`matrix-${section}`);
-            let html = "<table><thead><tr>";
-            html += `<th></th><th>Operations Problems</th>`;
+            let html = "<table><thead>";
+            // Super-header row: "Operations Problems" spanning the problem columns
+            html += `<tr><th class="no-bg" colspan="2"></th><th class="super-header" colspan="${problems.length}">Operations Problems</th></tr>`;
+            // Column headers row
+            html += "<tr><th class='no-bg'></th><th class='no-bg'></th>";
             problems.forEach(p => { html += `<th>${p}</th>`; });
             html += "</tr></thead><tbody>";
 
