@@ -436,12 +436,9 @@
         </div>
     </div>
 
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-
     <script>
         // ============================================================
-        // SUPABASE CONFIG - Update these with your project credentials
+        // SUPABASE CONFIG
         // ============================================================
         const SUPABASE_URL = "https://hwxfrfehgtcggueugakd.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3eGZyZmVoZ3RjZ2d1ZXVnYWtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4Mzk1ODEsImV4cCI6MjA4MjQxNTU4MX0.uq-UhfVUZ0fetdS59CIayk9jwYNOFcNLiTEgapjHVys";
@@ -471,28 +468,44 @@
         let useLocalStorage = false;
 
         // ============================================================
-        // SUPABASE INITIALIZATION
+        // SUPABASE INITIALIZATION (async - loads CDN dynamically)
         // ============================================================
-        function initSupabase() {
+        async function initSupabase() {
             const statusEl = document.getElementById("conn-status");
 
-            if (!SUPABASE_ANON_KEY || !window.supabase) {
-                console.warn("Supabase not configured, using localStorage fallback");
-                useLocalStorage = true;
-                statusEl.textContent = "Local mode (no sync)";
-                statusEl.className = "connection-status local";
-                return;
-            }
-
             try {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                // Dynamically load the Supabase JS client
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+
+                const createClient = window.supabase?.createClient;
+                if (!createClient) throw new Error("createClient not found");
+
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 statusEl.textContent = "Connected (live sync)";
                 statusEl.className = "connection-status connected";
+
+                // Now load data from Supabase and subscribe
+                await loadSelections("E9");
+                await loadSelections("E8");
+                subscribeToChanges();
             } catch (e) {
                 console.warn("Supabase init failed, using localStorage", e);
                 useLocalStorage = true;
                 statusEl.textContent = "Local mode (no sync)";
                 statusEl.className = "connection-status local";
+
+                // Load from localStorage instead
+                ["E9", "E8"].forEach(section => {
+                    selections[section] = getLocalSelections(section);
+                    renderMatrix(section);
+                });
+                subscribeToChanges();
             }
         }
 
@@ -807,8 +820,6 @@
         // INITIALIZATION
         // ============================================================
         function init() {
-            initSupabase();
-
             // Populate group selects
             ["E9", "E8"].forEach(section => {
                 const select = document.getElementById(`group-select-${section}`);
@@ -848,16 +859,14 @@
                 });
             });
 
-            // Build matrices
+            // Build matrices FIRST so they always show
             buildMatrix("E9");
             buildMatrix("E8");
+            renderMatrix("E9");
+            renderMatrix("E8");
 
-            // Load initial data
-            loadSelections("E9");
-            loadSelections("E8");
-
-            // Subscribe to realtime changes
-            subscribeToChanges();
+            // Then load Supabase async (won't block the UI)
+            initSupabase();
         }
 
         init();
