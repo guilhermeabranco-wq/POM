@@ -626,7 +626,6 @@
         // ============================================================
         function subscribeToChanges() {
             if (useLocalStorage) {
-                // Poll localStorage every 2 seconds for cross-tab sync
                 setInterval(() => {
                     ["E9", "E8"].forEach(section => {
                         selections[section] = getLocalSelections(section);
@@ -636,13 +635,37 @@
                 return;
             }
 
+            // Realtime: apply changes instantly from payload
             supabase
                 .channel("pom-realtime")
                 .on("postgres_changes",
-                    { event: "*", schema: "public", table: "pom_selections" },
+                    { event: "INSERT", schema: "public", table: "pom_selections" },
                     (payload) => {
-                        const section = payload.new?.section || payload.old?.section;
-                        if (section) loadSelections(section);
+                        const { section, group_name, cell_id } = payload.new;
+                        if (section && group_name) {
+                            selections[section][group_name] = cell_id;
+                            renderMatrix(section);
+                        }
+                    }
+                )
+                .on("postgres_changes",
+                    { event: "UPDATE", schema: "public", table: "pom_selections" },
+                    (payload) => {
+                        const { section, group_name, cell_id } = payload.new;
+                        if (section && group_name) {
+                            selections[section][group_name] = cell_id;
+                            renderMatrix(section);
+                        }
+                    }
+                )
+                .on("postgres_changes",
+                    { event: "DELETE", schema: "public", table: "pom_selections" },
+                    (payload) => {
+                        const { section, group_name } = payload.old;
+                        if (section && group_name) {
+                            delete selections[section][group_name];
+                            renderMatrix(section);
+                        }
                     }
                 )
                 .subscribe((status) => {
@@ -651,10 +674,16 @@
                         statusEl.textContent = "Live sync active";
                         statusEl.className = "connection-status connected";
                     } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-                        statusEl.textContent = "Disconnected";
+                        statusEl.textContent = "Disconnected - retrying...";
                         statusEl.className = "connection-status disconnected";
                     }
                 });
+
+            // Also poll every 10s as a safety net in case websocket drops
+            setInterval(() => {
+                loadSelections("E9");
+                loadSelections("E8");
+            }, 10000);
         }
 
         // ============================================================
