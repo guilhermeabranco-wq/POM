@@ -426,8 +426,10 @@
     </div>
 
     <div class="tabs">
-        <div class="tab active" data-section="E9">Section E9</div>
+        <div class="tab active" data-section="E6">Section E6</div>
+        <div class="tab" data-section="E7">Section E7</div>
         <div class="tab" data-section="E8">Section E8</div>
+        <div class="tab" data-section="E9">Section E9</div>
     </div>
 
     <div class="container">
@@ -440,18 +442,18 @@
             </div>
         </div>
 
-        <!-- Section E9 -->
-        <div class="section-content active" id="section-E9">
+        <!-- Section E6 -->
+        <div class="section-content active" id="section-E6">
             <div class="controls">
-                <label for="group-select-E9">Your Group:</label>
-                <select id="group-select-E9">
+                <label for="group-select-E6">Your Group:</label>
+                <select id="group-select-E6">
                     <option value="">-- Select your group --</option>
                 </select>
-                <button class="btn btn-save" id="save-btn-E9">Save Selection</button>
-                <button class="btn btn-clear" id="clear-btn-E9">Clear My Selection</button>
-                <span class="save-feedback" id="save-feedback-E9"></span>
+                <button class="btn btn-save" id="save-btn-E6">Save Selection</button>
+                <button class="btn btn-clear" id="clear-btn-E6">Clear My Selection</button>
+                <span class="save-feedback" id="save-feedback-E6"></span>
             </div>
-            <div class="matrix-wrapper" id="matrix-E9"></div>
+            <div class="matrix-wrapper" id="matrix-E6"></div>
             <div class="legend">
                 <span class="legend-title">Cell congestion:</span>
                 <div class="legend-item"><span class="legend-swatch" style="background:#ffffff"></span> Empty</div>
@@ -461,7 +463,31 @@
                 <div class="legend-item"><span class="legend-swatch" style="background:#fed7aa"></span> 4 teams (2.5 pts)</div>
                 <div class="legend-item"><span class="legend-swatch" style="background:#fecaca"></span> 5+ teams (&le;2 pts)</div>
             </div>
-            <div class="summary" id="summary-E9"></div>
+            <div class="summary" id="summary-E6"></div>
+        </div>
+
+        <!-- Section E7 -->
+        <div class="section-content" id="section-E7">
+            <div class="controls">
+                <label for="group-select-E7">Your Group:</label>
+                <select id="group-select-E7">
+                    <option value="">-- Select your group --</option>
+                </select>
+                <button class="btn btn-save" id="save-btn-E7">Save Selection</button>
+                <button class="btn btn-clear" id="clear-btn-E7">Clear My Selection</button>
+                <span class="save-feedback" id="save-feedback-E7"></span>
+            </div>
+            <div class="matrix-wrapper" id="matrix-E7"></div>
+            <div class="legend">
+                <span class="legend-title">Cell congestion:</span>
+                <div class="legend-item"><span class="legend-swatch" style="background:#ffffff"></span> Empty</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#d1fae5"></span> 1 team (10 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#a7f3d0"></span> 2 teams (5 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fef9c3"></span> 3 teams (3.33 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fed7aa"></span> 4 teams (2.5 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fecaca"></span> 5+ teams (&le;2 pts)</div>
+            </div>
+            <div class="summary" id="summary-E7"></div>
         </div>
 
         <!-- Section E8 -->
@@ -486,6 +512,30 @@
                 <div class="legend-item"><span class="legend-swatch" style="background:#fecaca"></span> 5+ teams (&le;2 pts)</div>
             </div>
             <div class="summary" id="summary-E8"></div>
+        </div>
+
+        <!-- Section E9 -->
+        <div class="section-content" id="section-E9">
+            <div class="controls">
+                <label for="group-select-E9">Your Group:</label>
+                <select id="group-select-E9">
+                    <option value="">-- Select your group --</option>
+                </select>
+                <button class="btn btn-save" id="save-btn-E9">Save Selection</button>
+                <button class="btn btn-clear" id="clear-btn-E9">Clear My Selection</button>
+                <span class="save-feedback" id="save-feedback-E9"></span>
+            </div>
+            <div class="matrix-wrapper" id="matrix-E9"></div>
+            <div class="legend">
+                <span class="legend-title">Cell congestion:</span>
+                <div class="legend-item"><span class="legend-swatch" style="background:#ffffff"></span> Empty</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#d1fae5"></span> 1 team (10 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#a7f3d0"></span> 2 teams (5 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fef9c3"></span> 3 teams (3.33 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fed7aa"></span> 4 teams (2.5 pts)</div>
+                <div class="legend-item"><span class="legend-swatch" style="background:#fecaca"></span> 5+ teams (&le;2 pts)</div>
+            </div>
+            <div class="summary" id="summary-E9"></div>
         </div>
     </div>
 
@@ -520,11 +570,12 @@
             "Pricing & Revenue Management"
         ];
 
-        const sections = { E9: { groups: 12 }, E8: { groups: 12 } };
+        const allSections = ["E6", "E7", "E8", "E9"];
+        const sections = { E6: { groups: 14 }, E7: { groups: 14 }, E8: { groups: 14 }, E9: { groups: 14 } };
 
-        let activeSection = "E9";
-        let selections = { E9: {}, E8: {} };
-        let pendingSelection = { E9: null, E8: null };
+        let activeSection = "E6";
+        let selections = { E6: {}, E7: {}, E8: {}, E9: {} };
+        let pendingSelection = { E6: null, E7: null, E8: null, E9: null };
         let dbConnected = false;
 
         // ============================================================
@@ -640,8 +691,7 @@
         // ============================================================
         function startPolling() {
             setInterval(() => {
-                fetchSelections("E9");
-                fetchSelections("E8");
+                allSections.forEach(s => fetchSelections(s));
             }, 3000);
         }
 
@@ -824,7 +874,7 @@
         // INITIALIZATION
         // ============================================================
         function init() {
-            ["E9", "E8"].forEach(section => {
+            allSections.forEach(section => {
                 const select = document.getElementById(`group-select-${section}`);
                 for (let i = 1; i <= sections[section].groups; i++) {
                     const opt = document.createElement("option");
@@ -864,14 +914,11 @@
             });
 
             // Build matrices immediately
-            buildMatrix("E9");
-            buildMatrix("E8");
-            renderMatrix("E9");
-            renderMatrix("E8");
-
-            // Fetch from Supabase
-            fetchSelections("E9");
-            fetchSelections("E8");
+            allSections.forEach(s => {
+                buildMatrix(s);
+                renderMatrix(s);
+                fetchSelections(s);
+            });
 
             // Poll every 3 seconds for real-time sync
             startPolling();
