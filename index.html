@@ -245,6 +245,17 @@
             background: rgba(0,122,110,0.08);
         }
 
+        .cell.pending {
+            outline: 3px dashed #f59e0b;
+            outline-offset: -3px;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { background: rgba(245,158,11,0.08); }
+            50% { background: rgba(245,158,11,0.18); }
+        }
+
         .cell .points {
             font-size: 1.5rem;
             font-weight: 800;
@@ -375,6 +386,28 @@
             font-size: 0.85rem;
         }
 
+        .btn-save {
+            background: var(--teal);
+            color: white;
+            display: none;
+        }
+        .btn-save:hover { background: #005f56; }
+        .btn-save.visible { display: inline-block; }
+        .btn-save.saving {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        .save-feedback {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 8px;
+            display: none;
+        }
+        .save-feedback.show { display: inline; }
+        .save-feedback.success { color: var(--green); }
+        .save-feedback.error { color: var(--red); }
+
         .section-content { display: none; }
         .section-content.active { display: block; }
 
@@ -414,7 +447,9 @@
                 <select id="group-select-E9">
                     <option value="">-- Select your group --</option>
                 </select>
+                <button class="btn btn-save" id="save-btn-E9">Save Selection</button>
                 <button class="btn btn-clear" id="clear-btn-E9">Clear My Selection</button>
+                <span class="save-feedback" id="save-feedback-E9"></span>
             </div>
             <div class="matrix-wrapper" id="matrix-E9"></div>
             <div class="legend">
@@ -436,7 +471,9 @@
                 <select id="group-select-E8">
                     <option value="">-- Select your group --</option>
                 </select>
+                <button class="btn btn-save" id="save-btn-E8">Save Selection</button>
                 <button class="btn btn-clear" id="clear-btn-E8">Clear My Selection</button>
+                <span class="save-feedback" id="save-feedback-E8"></span>
             </div>
             <div class="matrix-wrapper" id="matrix-E8"></div>
             <div class="legend">
@@ -480,6 +517,7 @@
 
         let activeSection = "E9";
         let selections = { E9: {}, E8: {} };
+        let pendingSelection = { E9: null, E8: null }; // cell clicked but not yet saved
         let supabase = null;
         let useLocalStorage = false;
 
@@ -565,15 +603,40 @@
             }
         }
 
-        async function selectCell(section, group, cellId) {
-            // Optimistic update
-            selections[section][group] = cellId;
+        function selectCell(section, group, cellId) {
+            // Only set as pending — don't save to DB yet
+            pendingSelection[section] = { group, cellId };
+            // Show Save button
+            document.getElementById(`save-btn-${section}`).classList.add("visible");
+            document.getElementById(`save-feedback-${section}`).className = "save-feedback";
             renderMatrix(section);
+        }
+
+        async function saveSelection(section) {
+            const pending = pendingSelection[section];
+            if (!pending) return;
+
+            const { group, cellId } = pending;
+            const saveBtn = document.getElementById(`save-btn-${section}`);
+            const feedback = document.getElementById(`save-feedback-${section}`);
+
+            saveBtn.classList.add("saving");
+            saveBtn.textContent = "Saving...";
+
+            // Apply to local state
+            selections[section][group] = cellId;
 
             if (useLocalStorage) {
                 const data = getLocalSelections(section);
                 data[group] = cellId;
                 setLocalSelections(section, data);
+                pendingSelection[section] = null;
+                saveBtn.classList.remove("visible", "saving");
+                saveBtn.textContent = "Save Selection";
+                feedback.textContent = "Saved!";
+                feedback.className = "save-feedback show success";
+                renderMatrix(section);
+                setTimeout(() => { feedback.className = "save-feedback"; }, 3000);
                 return;
             }
 
@@ -585,9 +648,21 @@
                         { onConflict: "section,group_name" }
                     );
                 if (error) throw error;
+
+                pendingSelection[section] = null;
+                saveBtn.classList.remove("visible", "saving");
+                saveBtn.textContent = "Save Selection";
+                feedback.textContent = "Saved! Others will see your selection now.";
+                feedback.className = "save-feedback show success";
+                renderMatrix(section);
+                setTimeout(() => { feedback.className = "save-feedback"; }, 4000);
             } catch (e) {
                 console.error("Failed to save selection", e);
-                // Keep optimistic update, save locally as backup
+                saveBtn.classList.remove("saving");
+                saveBtn.textContent = "Save Selection";
+                feedback.textContent = "Save failed — try again.";
+                feedback.className = "save-feedback show error";
+                // Save locally as backup
                 const data = getLocalSelections(section);
                 data[group] = cellId;
                 setLocalSelections(section, data);
@@ -731,11 +806,18 @@
         function renderMatrix(section) {
             const myGroup = document.getElementById(`group-select-${section}`).value;
             const sels = selections[section] || {};
+            const pending = pendingSelection[section];
+
+            // Build a merged view: saved selections + pending (unsaved) selection
+            const mergedSels = { ...sels };
+            if (pending && pending.group) {
+                mergedSels[pending.group] = pending.cellId;
+            }
 
             // Count groups per cell
             const cellCounts = {};
             const cellGroups = {};
-            Object.entries(sels).forEach(([group, cellId]) => {
+            Object.entries(mergedSels).forEach(([group, cellId]) => {
                 if (!cellCounts[cellId]) { cellCounts[cellId] = 0; cellGroups[cellId] = []; }
                 cellCounts[cellId]++;
                 cellGroups[cellId].push(group);
@@ -751,7 +833,8 @@
                     const count = cellCounts[cellId] || 0;
                     const groups = cellGroups[cellId] || [];
                     const points = count > 0 ? (10 / count) : 10;
-                    const isMyCell = sels[myGroup] === cellId;
+                    const isMyCell = mergedSels[myGroup] === cellId;
+                    const isPending = pending && pending.group === myGroup && pending.cellId === cellId;
 
                     // Reset classes
                     el.className = "cell";
@@ -764,7 +847,8 @@
                     else if (count === 4) el.classList.add("heat-4");
                     else el.classList.add("heat-5");
 
-                    if (isMyCell) el.classList.add("selected-by-me");
+                    if (isMyCell && !isPending) el.classList.add("selected-by-me");
+                    if (isPending) el.classList.add("selected-by-me", "pending");
 
                     // Cell content
                     let html = "";
@@ -773,8 +857,10 @@
                         html += `<span class="points-label">${count} team${count > 1 ? "s" : ""}</span>`;
                         html += `<div class="groups-in-cell">`;
                         groups.sort().forEach(g => {
+                            const isPendingGroup = pending && g === pending.group && cellId === pending.cellId;
                             const cls = g === myGroup ? "group-chip mine" : "group-chip";
-                            html += `<span class="${cls}">${g.replace("Group ", "G")}</span>`;
+                            const label = g.replace("Group ", "G") + (isPendingGroup ? " (unsaved)" : "");
+                            html += `<span class="${cls}">${label}</span>`;
                         });
                         html += `</div>`;
                     } else {
@@ -787,7 +873,7 @@
             });
 
             // Render summary
-            renderSummary(section, sels, cellCounts);
+            renderSummary(section, mergedSels, cellCounts);
         }
 
         function renderSummary(section, sels, cellCounts) {
@@ -888,10 +974,17 @@
                     renderMatrix(section);
                 });
 
+                // Save button
+                document.getElementById(`save-btn-${section}`).addEventListener("click", () => {
+                    saveSelection(section);
+                });
+
                 // Clear button
                 document.getElementById(`clear-btn-${section}`).addEventListener("click", () => {
                     const group = select.value;
                     if (!group) return;
+                    pendingSelection[section] = null;
+                    document.getElementById(`save-btn-${section}`).classList.remove("visible");
                     clearSelection(section, group);
                 });
             });
